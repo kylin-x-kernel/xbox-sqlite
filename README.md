@@ -28,28 +28,28 @@
 - 支持强制重新创建数据库
 - 显示详细的创建过程和使用示例
 
-### 2. 智能数据插入 (smart-insert)
+### 2. 智能数据插入 (insert)
 
 支持复杂业务逻辑的智能数据插入，根据不同数据类型采用不同的插入策略：
 
 ```bash
 # 插入服务器数据（已存在则更新状态）
-./target/debug/blackbox --db test.db smart-insert servers --file servers.json
+./target/debug/blackbox --db test.db insert servers --file servers.json
 
 # 插入系统指标（按时间戳智能更新/插入）
-./target/debug/blackbox --db test.db smart-insert system-metrics --file metrics.json
+./target/debug/blackbox --db test.db insert system-metrics --file metrics.json
 
 # 插入进程数据（按用户名和进程名智能处理，包含趋势和线程）
-./target/debug/blackbox --db test.db smart-insert processes --file processes.json
+./target/debug/blackbox --db test.db insert processes --file processes.json
 
 # 插入崩溃日志（按时间戳智能更新/插入）
-./target/debug/blackbox --db test.db smart-insert crash-logs --file crash_logs.json
+./target/debug/blackbox --db test.db insert crash-logs --file crash_logs.json
 
 # 遇到错误时继续处理
-./target/debug/blackbox --db test.db smart-insert servers --file servers.json --continue-on-error
+./target/debug/blackbox --db test.db insert servers --file servers.json --continue-on-error
 
 # 查看智能插入命令帮助
-./target/debug/blackbox smart-insert --help
+./target/debug/blackbox insert --help
 ```
 
 **智能插入策略**：
@@ -268,16 +268,16 @@
 ./target/debug/blackbox --db monitoring.db init
 
 # 2. 插入服务器信息
-./target/debug/blackbox --db monitoring.db smart-insert servers --file servers.json
+./target/debug/blackbox --db monitoring.db insert servers --file servers.json
 
 # 3. 插入系统指标数据
-./target/debug/blackbox --db monitoring.db smart-insert system-metrics --file metrics.json
+./target/debug/blackbox --db monitoring.db insert system-metrics --file metrics.json
 
 # 4. 插入进程监控数据
-./target/debug/blackbox --db monitoring.db smart-insert processes --file processes.json
+./target/debug/blackbox --db monitoring.db insert processes --file processes.json
 
 # 5. 插入崩溃日志
-./target/debug/blackbox --db monitoring.db smart-insert crash-logs --file crash_logs.json
+./target/debug/blackbox --db monitoring.db insert crash-logs --file crash_logs.json
 
 # 6. 查看统计信息
 ./target/debug/blackbox --db monitoring.db stats
@@ -297,19 +297,19 @@
 ```bash
 # 第一次插入服务器
 echo '[{"serverId":"srv-01","serverName":"Web服务器","serverIp":"192.168.1.100","serverOs":"Ubuntu 22.04","serverStatus":"running"}]' > server.json
-./target/debug/blackbox --db test.db smart-insert servers --file server.json
+./target/debug/blackbox --db test.db insert servers --file server.json
 
 # 更新服务器状态（相同 serverId 会自动更新）
 echo '[{"serverId":"srv-01","serverName":"Web服务器","serverIp":"192.168.1.100","serverOs":"Ubuntu 22.04","serverStatus":"maintenance"}]' > server_update.json
-./target/debug/blackbox --db test.db smart-insert servers --file server_update.json
+./target/debug/blackbox --db test.db insert servers --file server_update.json
 
 # 插入相同时间戳的指标数据会更新现有记录
 echo '[{"serverId":"srv-01","timestamp":1734249600000,"cpuUsage":45.2,"memoryUsage":68.5,"diskUsage":32.1,"ioRead":1024.5,"ioWrite":2048.3,"networkIn":512.7,"networkOut":256.9}]' > metrics1.json
-./target/debug/blackbox --db test.db smart-insert system-metrics --file metrics1.json
+./target/debug/blackbox --db test.db insert system-metrics --file metrics1.json
 
 # 相同时间戳，不同指标值 - 会更新现有记录
 echo '[{"serverId":"srv-01","timestamp":1734249600000,"cpuUsage":55.8,"memoryUsage":72.1,"diskUsage":33.5,"ioRead":1200.0,"ioWrite":2500.0,"networkIn":600.0,"networkOut":300.0}]' > metrics2.json
-./target/debug/blackbox --db test.db smart-insert system-metrics --file metrics2.json
+./target/debug/blackbox --db test.db insert system-metrics --file metrics2.json
 ```
 
 ### 多环境数据管理
@@ -317,15 +317,15 @@ echo '[{"serverId":"srv-01","timestamp":1734249600000,"cpuUsage":55.8,"memoryUsa
 ```bash
 # 开发环境
 ./target/debug/blackbox --db dev.db init
-./target/debug/blackbox --db dev.db smart-insert servers --file dev_servers.json
+./target/debug/blackbox --db dev.db insert servers --file dev_servers.json
 
 # 测试环境
 ./target/debug/blackbox --db test.db init
-./target/debug/blackbox --db test.db smart-insert servers --file test_servers.json
+./target/debug/blackbox --db test.db insert servers --file test_servers.json
 
 # 生产环境
 ./target/debug/blackbox --db production.db init
-./target/debug/blackbox --db production.db smart-insert servers --file prod_servers.json
+./target/debug/blackbox --db production.db insert servers --file prod_servers.json
 
 # 查看各环境统计
 ./target/debug/blackbox --db dev.db stats
