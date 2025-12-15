@@ -1,491 +1,353 @@
 # BlackBox - 服务器监控数据管理系统
 
-一个基于 Rust 和 SQLite 的高性能服务器监控数据管理系统，支持复杂的嵌套数据结构导入导出、实时查询分析和智能故障诊断。
+一个基于 Rust 和 SQLite 的高性能服务器监控数据管理系统，支持智能数据插入、复杂查询分析和数据库管理。
 
-## ✨ 功能特性
+## 📖 命令详解
 
-- 🗄️ **完整的数据库设计**：支持服务器、系统指标、进程、线程、崩溃日志等复杂数据结构
-- 📥 **智能数据导入**：从 JSON 文件批量导入监控数据，自动处理重复和关联关系
-- 📤 **灵活数据导出**：完整导出所有数据为 JSON 格式，保持原始结构完整性
-- 🔍 **强大查询功能**：支持服务器过滤、数据限制、统计分析等多种查询方式
-- 📊 **实时统计分析**：提供详细的系统指标统计、进程监控和崩溃日志分析
-- 🤖 **AI 故障诊断**：存储和管理 AI 生成的故障分析和修复建议
-- 🧹 **数据清理功能**：支持按时间清理旧数据，保持数据库性能
-- 🎨 **美观的命令行界面**：使用 clap 提供专业的命令行体验
-- 🗃️ **多数据库支持**：支持指定不同的数据库文件，便于数据隔离和管理
+### 1. 数据库初始化 (init)
 
-## 🏗️ 数据库架构
-
-系统包含 7 个核心数据表：
-
-- **servers**: 服务器基本信息
-- **system_metrics**: 系统监控指标（CPU、内存、磁盘、网络等）
-- **processes**: 进程信息
-- **process_trends**: 进程性能趋势数据
-- **threads**: 线程详细信息
-- **crash_logs**: 崩溃日志记录
-- **ai_recommendations**: AI 修复建议
-
-## 🚀 快速开始
-
-### 安装依赖
-
-确保系统已安装 Rust 和 Cargo：
+初始化新的数据库文件，创建所有必要的表结构和索引：
 
 ```bash
-# 安装 Rust（如果尚未安装）
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# 创建新数据库
+./target/debug/blackbox --db test.db init
 
-# 克隆项目
-git clone <repository-url>
-cd blackbox
+# 强制重新创建数据库（会删除现有数据）
+./target/debug/blackbox --db production.db init --force
 
-# 构建项目
-cargo build --release
+# 使用默认数据库路径
+./target/debug/blackbox init
+
+# 查看初始化命令帮助
+./target/debug/blackbox init --help
 ```
 
-### 安装到系统
+**功能特性**：
+- 自动创建 7 个核心数据表（servers, system_metrics, processes, process_trends, threads, crash_logs, ai_recommendations）
+- 创建优化查询性能的索引
+- 支持强制重新创建数据库
+- 显示详细的创建过程和使用示例
+
+### 2. 智能数据插入 (smart-insert)
+
+支持复杂业务逻辑的智能数据插入，根据不同数据类型采用不同的插入策略：
 
 ```bash
-# 方法1: 使用 cargo install（推荐）
-cargo install --path .
+# 插入服务器数据（已存在则更新状态）
+./target/debug/blackbox --db test.db smart-insert servers --file servers.json
 
-# 方法2: 手动复制到系统路径
-sudo cp target/release/blackbox /usr/local/bin/
+# 插入系统指标（按时间戳智能更新/插入）
+./target/debug/blackbox --db test.db smart-insert system-metrics --file metrics.json
 
-# 验证安装
-blackbox --version
+# 插入进程数据（按用户名和进程名智能处理，包含趋势和线程）
+./target/debug/blackbox --db test.db smart-insert processes --file processes.json
+
+# 插入崩溃日志（按时间戳智能更新/插入）
+./target/debug/blackbox --db test.db smart-insert crash-logs --file crash_logs.json
+
+# 遇到错误时继续处理
+./target/debug/blackbox --db test.db smart-insert servers --file servers.json --continue-on-error
+
+# 查看智能插入命令帮助
+./target/debug/blackbox smart-insert --help
 ```
 
-### 基本使用
+**智能插入策略**：
 
-```bash
-# 如果已安装到系统路径
-blackbox --help
-blackbox stats
-blackbox --version
+- **servers**: 根据 `serverId` 判断，已存在则更新 `serverStatus`，不存在则创建新记录
+- **system-metrics**: 根据 `serverId` + `timestamp` 判断，相同时间戳则更新指标值，否则新增记录
+- **processes**: 根据 `serverId` + `name` + `userName` 判断，存在则更新状态并添加趋势数据，线程数据完全覆盖
+- **crash-logs**: 根据 `serverId` + `timestamp` 判断，相同时间戳则更新日志内容，否则新增记录
 
-# 或者直接使用编译后的二进制文件
-./target/release/blackbox --help
-./target/release/blackbox stats
-./target/release/blackbox --version
+**支持的 JSON 数据格式**：
 
-# 指定数据库文件
-blackbox --db /path/to/custom.db stats
-./target/release/blackbox --db production.db stats
+服务器数据 (`servers.json`):
+```json
+[
+  {
+    "serverId": "web-server-01",
+    "serverName": "生产环境Web服务器",
+    "serverIp": "192.168.1.100",
+    "serverOs": "Ubuntu 22.04",
+    "serverStatus": "running"
+  }
+]
 ```
 
-## 🗃️ 数据库管理
+系统指标数据 (`metrics.json`):
+```json
+[
+  {
+    "serverId": "web-server-01",
+    "timestamp": 1734249600000,
+    "cpuUsage": 45.2,
+    "memoryUsage": 68.5,
+    "diskUsage": 32.1,
+    "ioRead": 1024.5,
+    "ioWrite": 2048.3,
+    "networkIn": 512.7,
+    "networkOut": 256.9
+  }
+]
+```
 
-### 指定数据库文件
+进程数据 (`processes.json`):
+```json
+[
+  {
+    "serverId": "web-server-01",
+    "pid": 1001,
+    "name": "nginx",
+    "userName": "www-data",
+    "status": "R",
+    "timestamp": 1734249600000,
+    "trend": [
+      {
+        "cpuUsage": 15.2,
+        "memoryUsage": 5.8,
+        "threadCount": 4
+      }
+    ],
+    "threads": [
+      {
+        "threadId": 1001,
+        "userName": "www-data",
+        "priority": 20,
+        "niceValue": 0,
+        "virtualMemory": "512M",
+        "residentMemory": "32M",
+        "sharedMemory": "8M",
+        "status": "R",
+        "cpuUsage": "12.5",
+        "memoryUsage": "4.2",
+        "runtime": "02:45:18",
+        "command": "nginx: master process /usr/sbin/nginx"
+      }
+    ]
+  }
+]
+```
 
-所有命令都支持 `--db` 选项来指定数据库文件：
+崩溃日志数据 (`crash_logs.json`):
+```json
+[
+  {
+    "serverId": "web-server-01",
+    "logId": 2001,
+    "timestamp": 1734249700000,
+    "crashType": "segmentation_fault",
+    "severity": "high",
+    "title": "Nginx 进程崩溃",
+    "message": "nginx worker process crashed with segmentation fault",
+    "stackTrace": "#0 0x00007f8b2c4a5b70 in nginx_worker_process()",
+    "resolved": false,
+    "aiSummary": "进程内存访问错误导致崩溃",
+    "aiAnalysis": "可能是配置文件错误或内存泄漏导致的问题"
+  }
+]
+```
+
+### 3. 数据导入 (import)
+
+从 JSON 文件批量导入完整的监控数据：
 
 ```bash
-# 使用默认数据库（./database.db 或 DATABASE_URL 环境变量）
-blackbox stats
+# 基本导入
+./target/debug/blackbox import
 
-# 指定数据库文件
-blackbox --db production.db stats
-blackbox --db /var/lib/monitoring/data.db query
+# 指定文件导入
+./target/debug/blackbox import --file data.json
 
-# 使用相对路径
-blackbox --db ../backup/old_data.db export --file recovery.json
+# 指定数据库和文件
+./target/debug/blackbox --db production.db import --file monitoring_data.json
 
-# 使用 SQLite URL 格式
-blackbox --db sqlite:///absolute/path/to/database.db stats
+# 清空现有数据后导入
+./target/debug/blackbox import --file data_new.json --clean
+
+# 查看导入命令帮助
+./target/debug/blackbox import --help
+```
+
+### 4. 数据导出 (export)
+
+将数据库中的所有数据导出为 JSON 格式：
+
+```bash
+# 基本导出（格式化输出）
+./target/debug/blackbox export
+
+# 指定输出文件
+./target/debug/blackbox export --file backup.json
+
+# 指定数据库导出
+./target/debug/blackbox --db production.db export --file prod_backup.json
+
+# 紧凑格式导出（节省空间）
+./target/debug/blackbox export --file compact.json --pretty false
+
+# 查看导出命令帮助
+./target/debug/blackbox export --help
+```
+
+### 5. 数据查询 (query)
+
+查询和分析数据库中的监控数据：
+
+```bash
+# 查询所有服务器数据
+./target/debug/blackbox query
+
+# 查询特定数据库
+./target/debug/blackbox --db production.db query
+
+# 查询特定服务器（支持 ID 和名称模糊匹配）
+./target/debug/blackbox query --server web-server-01
+./target/debug/blackbox --db test.db query --server "Web-Server"
+
+# 限制显示记录数
+./target/debug/blackbox query --limit 10
+
+# 组合查询
+./target/debug/blackbox --db monitoring.db query --server nginx --limit 5
+
+# 查看查询命令帮助
+./target/debug/blackbox query --help
+```
+
+**查询功能**：
+- 📊 系统指标趋势分析
+- 🔄 进程和线程监控详情
+- 🚨 崩溃日志和 AI 建议展示
+- 📈 统计摘要信息
+- 🔍 支持服务器名称和 ID 模糊匹配
+
+### 6. 统计信息 (stats)
+
+显示数据库的详细统计信息：
+
+```bash
+# 显示统计信息
+./target/debug/blackbox stats
+
+# 查看特定数据库统计
+./target/debug/blackbox --db production.db stats
+./target/debug/blackbox --db /var/lib/monitoring/archive.db stats
+```
+
+**统计内容**：
+- 服务器数量和状态分布
+- 各类数据记录总数
+- 每个服务器的详细指标
+- 最新数据时间戳
+- 未解决崩溃问题汇总
+
+### 7. 数据清理 (clean)
+
+清理指定时间之前的旧数据：
+
+```bash
+# 清理 30 天前的数据（需要确认）
+./target/debug/blackbox clean --days 30 --confirm
+
+# 清理特定数据库的旧数据
+./target/debug/blackbox --db production.db clean --days 7 --confirm
+
+# 预览清理操作（不加 --confirm）
+./target/debug/blackbox clean --days 15
+
+# 查看清理命令帮助
+./target/debug/blackbox clean --help
+```
+
+## 🚀 完整使用示例
+
+### 基本工作流程
+
+```bash
+# 1. 初始化新数据库
+./target/debug/blackbox --db monitoring.db init
+
+# 2. 插入服务器信息
+./target/debug/blackbox --db monitoring.db smart-insert servers --file servers.json
+
+# 3. 插入系统指标数据
+./target/debug/blackbox --db monitoring.db smart-insert system-metrics --file metrics.json
+
+# 4. 插入进程监控数据
+./target/debug/blackbox --db monitoring.db smart-insert processes --file processes.json
+
+# 5. 插入崩溃日志
+./target/debug/blackbox --db monitoring.db smart-insert crash-logs --file crash_logs.json
+
+# 6. 查看统计信息
+./target/debug/blackbox --db monitoring.db stats
+
+# 7. 查询特定服务器详情
+./target/debug/blackbox --db monitoring.db query --server web-server-01 --limit 10
+
+# 8. 导出备份数据
+./target/debug/blackbox --db monitoring.db export --file backup_$(date +%Y%m%d).json
+
+# 9. 清理旧数据
+./target/debug/blackbox --db monitoring.db clean --days 30 --confirm
+```
+
+### 智能更新示例
+
+```bash
+# 第一次插入服务器
+echo '[{"serverId":"srv-01","serverName":"Web服务器","serverIp":"192.168.1.100","serverOs":"Ubuntu 22.04","serverStatus":"running"}]' > server.json
+./target/debug/blackbox --db test.db smart-insert servers --file server.json
+
+# 更新服务器状态（相同 serverId 会自动更新）
+echo '[{"serverId":"srv-01","serverName":"Web服务器","serverIp":"192.168.1.100","serverOs":"Ubuntu 22.04","serverStatus":"maintenance"}]' > server_update.json
+./target/debug/blackbox --db test.db smart-insert servers --file server_update.json
+
+# 插入相同时间戳的指标数据会更新现有记录
+echo '[{"serverId":"srv-01","timestamp":1734249600000,"cpuUsage":45.2,"memoryUsage":68.5,"diskUsage":32.1,"ioRead":1024.5,"ioWrite":2048.3,"networkIn":512.7,"networkOut":256.9}]' > metrics1.json
+./target/debug/blackbox --db test.db smart-insert system-metrics --file metrics1.json
+
+# 相同时间戳，不同指标值 - 会更新现有记录
+echo '[{"serverId":"srv-01","timestamp":1734249600000,"cpuUsage":55.8,"memoryUsage":72.1,"diskUsage":33.5,"ioRead":1200.0,"ioWrite":2500.0,"networkIn":600.0,"networkOut":300.0}]' > metrics2.json
+./target/debug/blackbox --db test.db smart-insert system-metrics --file metrics2.json
 ```
 
 ### 多环境数据管理
 
 ```bash
 # 开发环境
-blackbox --db dev.db import --file dev_data.json
+./target/debug/blackbox --db dev.db init
+./target/debug/blackbox --db dev.db smart-insert servers --file dev_servers.json
 
 # 测试环境
-blackbox --db test.db import --file test_data.json --clean
+./target/debug/blackbox --db test.db init
+./target/debug/blackbox --db test.db smart-insert servers --file test_servers.json
 
 # 生产环境
-blackbox --db /var/lib/app/production.db stats
+./target/debug/blackbox --db production.db init
+./target/debug/blackbox --db production.db smart-insert servers --file prod_servers.json
 
-# 备份数据库
-cp production.db backup_$(date +%Y%m%d).db
-blackbox --db backup_$(date +%Y%m%d).db stats
+# 查看各环境统计
+./target/debug/blackbox --db dev.db stats
+./target/debug/blackbox --db test.db stats
+./target/debug/blackbox --db production.db stats
 ```
 
-### 数据库初始化
-
-新数据库需要先创建表结构：
+## 🛠️ 构建和安装
 
 ```bash
-# 创建表结构（需要 sqlite3 命令）
-sqlite3 new_database.db < migrations/2025-12-15-062601-0000_create_servers/up.sql
-sqlite3 new_database.db < migrations/2025-12-15-063138-0000_add_processes_and_logs/up.sql
-
-# 验证数据库
-blackbox --db new_database.db stats
-```
-
-## 📖 命令详解
-
-### 1. 数据导入 (import)
-
-从 JSON 文件导入监控数据到数据库：
-
-```bash
-# 基本导入
-./target/release/blackbox import
-
-# 指定文件导入
-./target/release/blackbox import --file data.json
-
-# 指定数据库和文件
-./target/release/blackbox --db production.db import --file monitoring_data.json
-
-# 清空现有数据后导入
-./target/release/blackbox import --file data_new.json --clean
-
-# 多环境导入
-./target/release/blackbox --db dev.db import --file dev_data.json --clean
-./target/release/blackbox --db test.db import --file test_data.json --clean
-
-# 查看导入命令帮助
-./target/release/blackbox import --help
-```
-
-**支持的数据格式**：
-- 服务器基本信息
-- 系统监控指标时间序列
-- 进程和线程详细信息
-- 崩溃日志和 AI 诊断建议
-
-### 2. 数据导出 (export)
-
-将数据库中的所有数据导出为 JSON 格式：
-
-```bash
-# 基本导出（格式化输出）
-./target/release/blackbox export
-
-# 指定输出文件
-./target/release/blackbox export --file backup.json
-
-# 指定数据库导出
-./target/release/blackbox --db production.db export --file prod_backup.json
-
-# 紧凑格式导出（节省空间）
-./target/release/blackbox export --file compact.json --pretty false
-
-# 多数据库备份
-./target/release/blackbox --db server1.db export --file server1_backup.json
-./target/release/blackbox --db server2.db export --file server2_backup.json
-
-# 查看导出命令帮助
-./target/release/blackbox export --help
-```
-
-**导出特性**：
-- 完整保持原始数据结构
-- 支持格式化和紧凑两种输出模式
-- 显示详细的导出统计信息
-- 自动计算文件大小
-
-### 3. 数据查询 (query)
-
-查询和分析数据库中的监控数据：
-
-```bash
-# 查询所有服务器数据
-./target/release/blackbox query
-
-# 查询特定数据库
-./target/release/blackbox --db production.db query
-
-# 查询特定服务器（支持 ID 和名称模糊匹配）
-./target/release/blackbox query --server ukui-server-01
-./target/release/blackbox --db test.db query --server "Web-Server"
-
-# 限制显示记录数
-./target/release/blackbox query --limit 10
-
-# 组合查询
-./target/release/blackbox --db monitoring.db query --server ukui --limit 5
-
-# 查看查询命令帮助
-./target/release/blackbox query --help
-```
-
-**查询功能**：
-- 📊 系统指标趋势分析
-- 🔄 进程和线程监控
-- 🚨 崩溃日志详情
-- 🤖 AI 修复建议展示
-- 📈 统计摘要信息
-
-### 4. 统计信息 (stats)
-
-显示数据库的详细统计信息：
-
-```bash
-# 显示统计信息
-./target/release/blackbox stats
-
-# 查看特定数据库统计
-./target/release/blackbox --db production.db stats
-./target/release/blackbox --db /var/lib/monitoring/archive.db stats
-```
-
-**统计内容**：
-- 服务器数量和状态
-- 各类数据记录总数
-- 最新数据时间戳
-- 未解决问题汇总
-
-### 5. 数据清理 (clean)
-
-清理指定时间之前的旧数据：
-
-```bash
-# 清理 30 天前的数据（需要确认）
-./target/release/blackbox clean --days 30 --confirm
-
-# 清理特定数据库的旧数据
-./target/release/blackbox --db production.db clean --days 7 --confirm
-
-# 预览清理操作（不加 --confirm）
-./target/release/blackbox clean --days 15
-
-# 批量清理多个数据库
-./target/release/blackbox --db server1.db clean --days 30 --confirm
-./target/release/blackbox --db server2.db clean --days 30 --confirm
-
-# 查看清理命令帮助
-./target/release/blackbox clean --help
-```
-
-## 📊 使用示例
-
-### 完整工作流程
-
-```bash
-# 1. 查看当前数据库状态
-./target/release/blackbox --db production.db stats
-
-# 2. 导入新的监控数据
-./target/release/blackbox --db production.db import --file monitoring_data.json
-
-# 3. 查询特定服务器的详细信息
-./target/release/blackbox --db production.db query --server production-web-01 --limit 20
-
-# 4. 导出备份数据
-./target/release/blackbox --db production.db export --file backup_$(date +%Y%m%d).json
-
-# 5. 清理 30 天前的旧数据
-./target/release/blackbox --db production.db clean --days 30 --confirm
-
-# 6. 多环境管理
-./target/release/blackbox --db dev.db import --file dev_data.json --clean
-./target/release/blackbox --db test.db import --file test_data.json --clean
-./target/release/blackbox --db staging.db import --file staging_data.json
-```
-
-### 数据格式示例
-
-支持的 JSON 数据格式：
-
-```json
-{
-  "servers": [
-    {
-      "serverId": "web-server-01",
-      "serverName": "Production Web Server",
-      "serverIp": "192.168.1.100",
-      "serverOs": "Ubuntu 20.04",
-      "serverStatus": "running",
-      "systemMetrics": [
-        {
-          "timestamp": 1703299200000,
-          "cpuUsage": 45.2,
-          "memoryUsage": 68.5,
-          "diskUsage": 32.1,
-          "ioRead": 1024.5,
-          "ioWrite": 512.3,
-          "networkIn": 2048.7,
-          "networkOut": 1536.4
-        }
-      ],
-      "processes": [
-        {
-          "pid": 1234,
-          "name": "nginx",
-          "userName": "www-data",
-          "status": "S",
-          "trend": [...],
-          "threads": [...]
-        }
-      ],
-      "crashLogs": [
-        {
-          "id": 1703299200000,
-          "timestamp": 1703299200000,
-          "crashType": "segmentation_fault",
-          "severity": "critical",
-          "title": "应用程序崩溃",
-          "message": "详细错误信息...",
-          "stackTrace": "堆栈跟踪...",
-          "resolved": false,
-          "aiSuggestion": {
-            "summary": "问题摘要",
-            "analysis": "详细分析",
-            "recommendations": [
-              {
-                "priority": 1,
-                "action": "修复建议",
-                "command": "执行命令"
-              }
-            ]
-          }
-        }
-      ]
-    }
-  ]
-}
-```
-
-## 🛠️ 技术栈
-
-- **语言**: Rust 2024 Edition
-- **数据库**: SQLite 3
-- **ORM**: Diesel 2.3
-- **CLI**: clap 4.4
-- **序列化**: serde + serde_json
-- **时间处理**: chrono
-- **错误处理**: anyhow
-
-## 📁 项目结构
-
-```
-blackbox/
-├── src/
-│   ├── main.rs          # 主程序和命令行界面
-│   ├── models.rs        # 数据模型定义
-│   ├── schema.rs        # 数据库表结构
-│   └── database.rs      # 数据库操作函数
-├── migrations/          # 数据库迁移文件
-├── Cargo.toml          # 项目配置和依赖
-├── diesel.toml         # Diesel ORM 配置
-├── .env                # 环境变量配置
-└── README.md           # 项目文档
-```
-
-## 🔧 配置
-
-### 环境变量
-
-在 `.env` 文件中配置数据库连接：
-
-```env
-DATABASE_URL=sqlite:///path/to/your/database.db
-```
-
-### 数据库初始化
-
-项目会自动创建和管理 SQLite 数据库，无需手动初始化。
-
-## 🚀 性能特性
-
-- **高效查询**: 使用索引优化的数据库查询
-- **批量操作**: 支持大量数据的快速导入导出
-- **内存优化**: 流式处理大文件，避免内存溢出
-- **并发安全**: 使用 Rust 的所有权系统保证线程安全
-- **零依赖部署**: 编译后的二进制文件可独立运行，无需额外依赖
-- **跨平台支持**: 支持 Linux、macOS、Windows 等主流操作系统
-
-## 📦 部署选项
-
-### 单文件部署
-
-```bash
-# 构建优化版本
+# 构建项目
 cargo build --release
 
-# 复制到目标服务器
-scp target/release/blackbox user@server:/usr/local/bin/
+# 运行测试
+cargo test
 
-# 在目标服务器上运行
-ssh user@server "blackbox stats"
+# 安装到系统
+cargo install --path .
+
+# 查看版本信息
+./target/debug/blackbox --version
 ```
-
-### Docker 部署
-
-创建 `Dockerfile`：
-
-```dockerfile
-FROM rust:1.75 as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release
-
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y sqlite3 && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/blackbox /usr/local/bin/
-WORKDIR /data
-ENTRYPOINT ["blackbox"]
-```
-
-构建和运行：
-
-```bash
-# 构建镜像
-docker build -t blackbox .
-
-# 运行容器
-docker run -v $(pwd)/data:/data blackbox stats
-```
-
-## 🤝 贡献指南
-
-1. Fork 本项目
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 🆘 故障排除
-
-### 常见问题
-
-**Q: 导入数据时出现 "数据库连接失败" 错误**
-A: 检查 `.env` 文件中的 `DATABASE_URL` 配置是否正确，确保数据库文件路径存在且有写入权限。
-
-**Q: 导出的 JSON 文件过大**
-A: 使用 `--pretty false` 参数导出紧凑格式，或者使用 `query --limit` 限制数据量。
-
-**Q: 查询速度较慢**
-A: 对于大量数据，建议定期使用 `clean` 命令清理旧数据，保持数据库性能。
-
-## 📈 性能基准
-
-在标准硬件配置下的性能表现：
-
-| 操作 | 数据量 | 耗时 | 内存使用 |
-|------|--------|------|----------|
-| 导入 JSON | 10万条指标 | ~2.5s | ~50MB |
-| 导出 JSON | 10万条指标 | ~1.8s | ~80MB |
-| 查询统计 | 50万条记录 | ~0.3s | ~20MB |
-| 数据清理 | 删除1万条 | ~0.5s | ~10MB |
-
-*测试环境: MacBook Pro M1, 16GB RAM, SSD*
-
-### 获取帮助
-
-- 查看命令帮助：`./target/release/blackbox <command> --help`
-- 查看所有命令：`./target/release/blackbox --help`
-- 提交 Issue：[GitHub Issues](https://github.com/your-repo/blackbox/issues)
 
 ---
 

@@ -5,6 +5,9 @@ mod database;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::fs;
+use std::path::Path;
+use diesel::prelude::*;
+use diesel::{Connection, RunQueryDsl};
 use models::*;
 use database::*;
 
@@ -57,7 +60,7 @@ enum Commands {
         force: bool,
     },
     /// 智能插入数据记录 (支持复杂业务逻辑)
-    SmartInsert {
+    Insert {
         /// 数据类型 (servers, system_metrics, processes, crash_logs)
         #[arg(value_enum)]
         data_type: SmartDataType,
@@ -113,7 +116,10 @@ fn main() -> Result<()> {
         Some(Commands::Query { server, limit }) => {
             query_data(&mut conn, server.as_deref(), limit)?;
         }
-        Some(Commands::SmartInsert { data_type, file, continue_on_error }) => {
+        Some(Commands::Init { force }) => {
+            init_database(&cli.db, force)?;
+        }
+        Some(Commands::Insert { data_type, file, continue_on_error }) => {
             smart_insert_from_file(&mut conn, data_type, &file, continue_on_error)?;
         }
         Some(Commands::Stats) => {
@@ -942,6 +948,187 @@ fn smart_insert_crash_logs(conn: &mut diesel::SqliteConnection, crash_logs: Vec<
     println!("   ✅ 新建: {} 条", success_count);
     println!("   🔄 更新: {} 条", updated_count);
     println!("   ❌ 失败: {} 条", error_count);
+    
+    Ok(())
+}
+fn init_database(db_path: &Option<String>, force: bool) -> Result<()> {
+    let database_url = if let Some(path) = db_path {
+        if path.starts_with("sqlite://") {
+            path.clone()
+        } else {
+            format!("sqlite://{}", path)
+        }
+    } else {
+        "sqlite://./database.db".to_string()
+    };
+    
+    // 提取文件路径
+    let file_path = database_url.strip_prefix("sqlite://").unwrap_or(&database_url);
+    
+    println!("🔧 正在初始化数据库: {}", file_path);
+    
+    // 检查文件是否已存在
+    if Path::new(file_path).exists() {
+        if !force {
+            println!("⚠️  数据库文件已存在: {}", file_path);
+            println!("   使用 --force 参数强制重新创建数据库");
+            return Ok(());
+        } else {
+            println!("🗑️  删除现有数据库文件...");
+            fs::remove_file(file_path)?;
+        }
+    }
+    
+    // 创建数据库连接（这会自动创建文件）
+    println!("📁 创建数据库文件...");
+    let mut conn = diesel::SqliteConnection::establish(&database_url)?;
+    
+    // 执行建表 SQL
+    println!("🏗️  创建数据表...");
+    
+    // 创建 servers 表
+    diesel::sql_query(r#"
+        CREATE TABLE servers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            server_id TEXT NOT NULL UNIQUE,
+            server_name TEXT NOT NULL,
+            server_ip TEXT NOT NULL,
+            server_os TEXT NOT NULL,
+            server_status TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    "#).execute(&mut conn)?;
+    
+    // 创建 system_metrics 表
+    diesel::sql_query(r#"
+        CREATE TABLE system_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            server_id TEXT NOT NULL,
+            timestamp BIGINT NOT NULL,
+            cpu_usage REAL NOT NULL,
+            memory_usage REAL NOT NULL,
+            disk_usage REAL NOT NULL,
+            io_read REAL NOT NULL,
+            io_write REAL NOT NULL,
+            network_in REAL NOT NULL,
+            network_out REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (server_id) REFERENCES servers(server_id)
+        )
+    "#).execute(&mut conn)?;
+    
+    // 创建 processes 表
+    diesel::sql_query(r#"
+        CREATE TABLE processes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            server_id TEXT NOT NULL,
+            pid INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            user_name TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (server_id) REFERENCES servers(server_id)
+        )
+    "#).execute(&mut conn)?;
+    
+    // 创建 process_trends 表
+    diesel::sql_query(r#"
+        CREATE TABLE process_trends (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            server_id TEXT NOT NULL,
+            pid INTEGER NOT NULL,
+            timestamp BIGINT NOT NULL,
+            cpu_usage REAL NOT NULL,
+            memory_usage REAL NOT NULL,
+            thread_count INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (server_id) REFERENCES servers(server_id)
+        )
+    "#).execute(&mut conn)?;
+    
+    // 创建 threads 表
+    diesel::sql_query(r#"
+        CREATE TABLE threads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            server_id TEXT NOT NULL,
+            pid INTEGER NOT NULL,
+            thread_id INTEGER NOT NULL,
+            user_name TEXT NOT NULL,
+            priority INTEGER NOT NULL,
+            nice_value INTEGER NOT NULL,
+            virtual_memory TEXT NOT NULL,
+            resident_memory TEXT NOT NULL,
+            shared_memory TEXT NOT NULL,
+            status TEXT NOT NULL,
+            cpu_usage TEXT NOT NULL,
+            memory_usage TEXT NOT NULL,
+            runtime TEXT NOT NULL,
+            command TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (server_id) REFERENCES servers(server_id)
+        )
+    "#).execute(&mut conn)?;
+    
+    // 创建 crash_logs 表
+    diesel::sql_query(r#"
+        CREATE TABLE crash_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            server_id TEXT NOT NULL,
+            log_id BIGINT NOT NULL,
+            timestamp BIGINT NOT NULL,
+            crash_type TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            stack_trace TEXT,
+            resolved BOOLEAN NOT NULL DEFAULT 0,
+            ai_summary TEXT,
+            ai_analysis TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (server_id) REFERENCES servers(server_id)
+        )
+    "#).execute(&mut conn)?;
+    
+    // 创建 ai_recommendations 表
+    diesel::sql_query(r#"
+        CREATE TABLE ai_recommendations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            crash_log_id INTEGER NOT NULL,
+            priority INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            command TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (crash_log_id) REFERENCES crash_logs(id)
+        )
+    "#).execute(&mut conn)?;
+    
+    // 创建索引以提高查询性能
+    println!("📊 创建索引...");
+    
+    diesel::sql_query("CREATE INDEX idx_servers_server_id ON servers(server_id)").execute(&mut conn)?;
+    diesel::sql_query("CREATE INDEX idx_system_metrics_server_timestamp ON system_metrics(server_id, timestamp)").execute(&mut conn)?;
+    diesel::sql_query("CREATE INDEX idx_processes_server_name_user ON processes(server_id, name, user_name)").execute(&mut conn)?;
+    diesel::sql_query("CREATE INDEX idx_process_trends_server_pid ON process_trends(server_id, pid)").execute(&mut conn)?;
+    diesel::sql_query("CREATE INDEX idx_threads_server_pid ON threads(server_id, pid)").execute(&mut conn)?;
+    diesel::sql_query("CREATE INDEX idx_crash_logs_server_timestamp ON crash_logs(server_id, timestamp)").execute(&mut conn)?;
+    diesel::sql_query("CREATE INDEX idx_ai_recommendations_crash_log ON ai_recommendations(crash_log_id)").execute(&mut conn)?;
+    
+    println!("✅ 数据库初始化完成！");
+    println!("\n📋 创建的表:");
+    println!("   🖥️  servers - 服务器信息");
+    println!("   📊 system_metrics - 系统指标数据");
+    println!("   ⚙️  processes - 进程信息");
+    println!("   📈 process_trends - 进程趋势数据");
+    println!("   🧵 threads - 线程信息");
+    println!("   🚨 crash_logs - 崩溃日志");
+    println!("   🤖 ai_recommendations - AI 建议");
+    
+    println!("\n💡 使用示例:");
+    println!("   blackbox --db {} smart-insert servers --file servers.json", file_path);
+    println!("   blackbox --db {} query", file_path);
+    println!("   blackbox --db {} stats", file_path);
     
     Ok(())
 }

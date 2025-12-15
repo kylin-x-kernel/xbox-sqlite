@@ -1,0 +1,15 @@
+[
+  {
+    "serverId": "test-server-001",
+    "logId": 2001,
+    "timestamp": 1734249700000,
+    "crashType": "segmentation_fault",
+    "severity": "high",
+    "title": "UKUI Panel 崩溃",
+    "message": "ukui-panel process crashed with segmentation fault in libQt5Core.so.5",
+    "stackTrace": "#0  0x00007f8b2c4a5b70 in QObject::connect() from /usr/lib/x86_64-linux-gnu/libQt5Core.so.5\n#1  0x00007f8b2d1234ab in ukui::Panel::initConnections()\n#2  0x00007f8b2d1235cd in ukui::Panel::Panel()",
+    "resolved": false,
+    "aiSummary": "Qt5 库中的对象连接错误导致面板崩溃",
+    "aiAnalysis": "可能是由于 Qt5 版本不兼容或内存管理问题导致的崩溃"
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "serverId": "test-server-001",
+    "pid": 1001,
+    "name": "ukui-panel",
+    "userName": "ukui",
+    "status": "S",
+    "timestamp": 1734249600000,
+    "trend": [
+      {
+        "cpuUsage": 8.89,
+        "memoryUsage": 2.99,
+        "threadCount": 12
+      }
+    ],
+    "threads": []
+  }
+]

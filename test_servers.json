@@ -1,0 +1,9 @@
+[
+  {
+    "serverId": "test-server-001",
+    "serverName": "测试服务器1",
+    "serverIp": "192.168.1.100",
+    "serverOs": "Ubuntu 22.04",
+    "serverStatus": "running"
+  }
+]

@@ -1,0 +1,24 @@
+[
+  {
+    "serverId": "test-server-001",
+    "timestamp": 1734249600000,
+    "cpuUsage": 45.2,
+    "memoryUsage": 68.5,
+    "diskUsage": 32.1,
+    "ioRead": 1024.5,
+    "ioWrite": 2048.3,
+    "networkIn": 512.7,
+    "networkOut": 256.9
+  },
+  {
+    "serverId": "test-server-001",
+    "timestamp": 1734249660000,
+    "cpuUsage": 52.8,
+    "memoryUsage": 71.2,
+    "diskUsage": 32.3,
+    "ioRead": 1156.2,
+    "ioWrite": 2234.1,
+    "networkIn": 623.4,
+    "networkOut": 312.5
+  }
+]

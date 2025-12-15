@@ -18,6 +18,7 @@ pub struct Server {
 
 #[derive(Insertable, Serialize, Deserialize, Debug)]
 #[diesel(table_name = crate::schema::servers)]
+#[serde(rename_all = "camelCase")]
 pub struct NewServer {
     pub server_id: String,
     pub server_name: String,
@@ -45,6 +46,7 @@ pub struct SystemMetric {
 
 #[derive(Insertable, Serialize, Deserialize, Debug)]
 #[diesel(table_name = crate::schema::system_metrics)]
+#[serde(rename_all = "camelCase")]
 pub struct NewSystemMetric {
     pub server_id: String,
     pub timestamp: i64,
@@ -74,6 +76,7 @@ pub struct Process {
 
 #[derive(Insertable, Serialize, Deserialize, Debug)]
 #[diesel(table_name = crate::schema::processes)]
+#[serde(rename_all = "camelCase")]
 pub struct NewProcess {
     pub server_id: String,
     pub pid: i32,
@@ -99,6 +102,7 @@ pub struct ProcessTrend {
 
 #[derive(Insertable, Serialize, Deserialize, Debug)]
 #[diesel(table_name = crate::schema::process_trends)]
+#[serde(rename_all = "camelCase")]
 pub struct NewProcessTrend {
     pub server_id: String,
     pub pid: i32,
@@ -133,6 +137,7 @@ pub struct Thread {
 
 #[derive(Insertable, Serialize, Deserialize, Debug)]
 #[diesel(table_name = crate::schema::threads)]
+#[serde(rename_all = "camelCase")]
 pub struct NewThread {
     pub server_id: String,
     pub pid: i32,
@@ -172,6 +177,7 @@ pub struct CrashLog {
 
 #[derive(Insertable, Serialize, Deserialize, Debug)]
 #[diesel(table_name = crate::schema::crash_logs)]
+#[serde(rename_all = "camelCase")]
 pub struct NewCrashLog {
     pub server_id: String,
     pub log_id: i64,
@@ -201,6 +207,7 @@ pub struct AiRecommendation {
 
 #[derive(Insertable, Serialize, Deserialize, Debug)]
 #[diesel(table_name = crate::schema::ai_recommendations)]
+#[serde(rename_all = "camelCase")]
 pub struct NewAiRecommendation {
     pub crash_log_id: i32,
     pub priority: i32,
