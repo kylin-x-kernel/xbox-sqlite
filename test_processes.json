@@ -1,6 +1,10 @@
 [
   {
     "serverId": "test-server-001",
+    "serverName": "测试服务器1",
+    "serverIp": "192.168.1.100",
+    "serverOs": "Ubuntu 22.04",
+    "serverStatus": "running",
     "pid": 1001,
     "name": "ukui-panel",
     "userName": "ukui",
@@ -13,6 +17,70 @@
         "threadCount": 12
       }
     ],
-    "threads": []
+    "threads": [
+      {
+        "threadId": 1001,
+        "userName": "ukui",
+        "priority": 20,
+        "niceValue": 0,
+        "virtualMemory": "1.2G",
+        "residentMemory": "45M",
+        "sharedMemory": "12M",
+        "status": "S",
+        "cpuUsage": "2.1",
+        "memoryUsage": "1.5",
+        "runtime": "00:15:32",
+        "command": "/usr/bin/ukui-panel --display=:0"
+      },
+      {
+        "threadId": 1002,
+        "userName": "ukui",
+        "priority": 20,
+        "niceValue": 0,
+        "virtualMemory": "1.2G",
+        "residentMemory": "45M",
+        "sharedMemory": "12M",
+        "status": "S",
+        "cpuUsage": "0.8",
+        "memoryUsage": "0.6",
+        "runtime": "00:15:32",
+        "command": "/usr/bin/ukui-panel --display=:0"
+      }
+    ]
+  },
+  {
+    "serverId": "test-server-003",
+    "serverName": "测试服务器3",
+    "serverIp": "192.168.1.103",
+    "serverOs": "CentOS 8",
+    "serverStatus": "running",
+    "pid": 1234,
+    "name": "nginx",
+    "userName": "www-data",
+    "status": "R",
+    "timestamp": 1734249660000,
+    "trend": [
+      {
+        "cpuUsage": 15.2,
+        "memoryUsage": 5.8,
+        "threadCount": 4
+      }
+    ],
+    "threads": [
+      {
+        "threadId": 1234,
+        "userName": "www-data",
+        "priority": 20,
+        "niceValue": 0,
+        "virtualMemory": "512M",
+        "residentMemory": "32M",
+        "sharedMemory": "8M",
+        "status": "R",
+        "cpuUsage": "12.5",
+        "memoryUsage": "4.2",
+        "runtime": "02:45:18",
+        "command": "nginx: master process /usr/sbin/nginx"
+      }
+    ]
   }
 ]

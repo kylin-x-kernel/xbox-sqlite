@@ -325,6 +325,11 @@ pub struct SmartProcessInsert {
     pub timestamp: i64,
     pub trend: Vec<SmartProcessTrend>,
     pub threads: Vec<SmartThread>,
+    // 服务器信息字段（仅用于自动创建服务器，不插入进程表）
+    pub server_name: Option<String>,
+    pub server_ip: Option<String>,
+    pub server_os: Option<String>,
+    pub server_status: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

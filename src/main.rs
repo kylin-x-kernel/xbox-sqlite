@@ -732,14 +732,45 @@ fn smart_insert_processes(conn: &mut diesel::SqliteConnection, processes: Vec<Sm
     let mut error_count = 0;
     
     for process_data in processes {
-        // 验证服务器是否存在
+        // 验证服务器是否存在，如果不存在则尝试自动创建
         if get_server_by_id(conn, &process_data.server_id)?.is_none() {
-            error_count += 1;
-            eprintln!("❌ 服务器 {} 不存在", process_data.server_id);
-            if !continue_on_error {
-                return Err(anyhow::anyhow!("服务器 {} 不存在", process_data.server_id));
+            // 检查是否提供了服务器信息用于自动创建
+            if let (Some(server_name), Some(server_ip), Some(server_os), Some(server_status)) = (
+                &process_data.server_name,
+                &process_data.server_ip,
+                &process_data.server_os,
+                &process_data.server_status,
+            ) {
+                println!("🔧 服务器 {} 不存在，正在自动创建...", process_data.server_id);
+                let new_server = NewServer {
+                    server_id: process_data.server_id.clone(),
+                    server_name: server_name.clone(),
+                    server_ip: server_ip.clone(),
+                    server_os: server_os.clone(),
+                    server_status: server_status.clone(),
+                };
+                
+                match create_server(conn, &new_server) {
+                    Ok(_) => {
+                        println!("✅ 自动创建服务器: {} ({})", server_name, process_data.server_id);
+                    }
+                    Err(e) => {
+                        error_count += 1;
+                        eprintln!("❌ 自动创建服务器 {} 失败: {}", process_data.server_id, e);
+                        if !continue_on_error {
+                            return Err(e);
+                        }
+                        continue;
+                    }
+                }
+            } else {
+                error_count += 1;
+                eprintln!("❌ 服务器 {} 不存在且未提供服务器信息用于自动创建", process_data.server_id);
+                if !continue_on_error {
+                    return Err(anyhow::anyhow!("服务器 {} 不存在且未提供服务器信息用于自动创建", process_data.server_id));
+                }
+                continue;
             }
-            continue;
         }
         
         match get_process_by_name_and_user(conn, &process_data.server_id, &process_data.name, &process_data.user_name)? {

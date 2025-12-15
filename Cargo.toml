@@ -20,3 +20,8 @@ features = [
     "v4",                # Lets you generate random UUIDs
     "serde",
 ]
+
+# 右侧需要指定 SQLite 版本
+[dependencies.libsqlite3-sys]
+version = "0.27"
+features = ["bundled"]
