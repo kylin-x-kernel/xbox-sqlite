@@ -1,0 +1,21 @@
+[package]
+name = "blackbox"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = { version = "0.4.42", features = ["serde"] }
+diesel = { version = "2.3.4", features = ["sqlite", "chrono", "uuid"] }
+dotenv = "0.15.0"
+envy = "0.4.2"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+lazy_static = "1.5"
+anyhow = "1.0"
+
+[dependencies.uuid]
+version = "1.13.1"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "serde",
+]
