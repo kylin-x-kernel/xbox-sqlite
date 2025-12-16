@@ -45,6 +45,9 @@
 # 插入崩溃日志（按时间戳智能更新/插入）
 ./target/debug/blackbox --db test.db insert crash-logs --file crash_logs.json
 
+# 🆕 组合插入（同时插入进程和系统指标数据）
+./target/debug/blackbox --db test.db insert combined --file test_save.json
+
 # 遇到错误时继续处理
 ./target/debug/blackbox --db test.db insert servers --file servers.json --continue-on-error
 
@@ -58,6 +61,7 @@
 - **system-metrics**: 根据 `serverId` + `timestamp` 判断，相同时间戳则更新指标值，否则新增记录
 - **processes**: 根据 `serverId` + `name` + `userName` 判断，存在则更新状态并添加趋势数据，线程数据完全覆盖
 - **crash-logs**: 根据 `serverId` + `timestamp` 判断，相同时间戳则更新日志内容，否则新增记录
+- **🆕 combined**: 组合插入模式，同时处理进程和系统指标数据，自动创建服务器（如果不存在），智能处理数据关联
 
 **支持的 JSON 数据格式**：
 
@@ -146,6 +150,69 @@
   }
 ]
 ```
+
+🆕 **组合数据** (`test_save.json` - 同时包含进程和系统指标):
+```json
+{
+  "process": [
+    {
+      "serverId": "test-server-001",
+      "serverName": "测试服务器1",
+      "serverIp": "192.168.1.100",
+      "serverOs": "Ubuntu 22.04",
+      "serverStatus": "running",
+      "pid": 1001,
+      "name": "ukui-panel",
+      "userName": "ukui",
+      "status": "S",
+      "timestamp": 1734249600000,
+      "trend": [
+        {
+          "cpuUsage": 8.89,
+          "memoryUsage": 2.99,
+          "threadCount": 12
+        }
+      ],
+      "threads": [
+        {
+          "threadId": 1001,
+          "userName": "ukui",
+          "priority": 20,
+          "niceValue": 0,
+          "virtualMemory": "1.2G",
+          "residentMemory": "45M",
+          "sharedMemory": "12M",
+          "status": "S",
+          "cpuUsage": "2.1",
+          "memoryUsage": "1.5",
+          "runtime": "00:15:32",
+          "command": "/usr/bin/ukui-panel --display=:0"
+        }
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "serverId": "test-server-001",
+      "timestamp": 1734249600000,
+      "cpuUsage": 45.2,
+      "memoryUsage": 68.5,
+      "diskUsage": 32.1,
+      "ioRead": 1024.5,
+      "ioWrite": 2048.3,
+      "networkIn": 512.7,
+      "networkOut": 256.9
+    }
+  ]
+}
+```
+
+**组合插入的优势**：
+- 🔄 **一次性处理**: 同时插入进程和系统指标数据，保证数据一致性
+- 🏗️ **自动创建服务器**: 如果服务器不存在，会根据进程数据中的服务器信息自动创建
+- 🧠 **智能关联**: 自动处理进程、趋势、线程和系统指标之间的关联关系
+- ⚡ **高效处理**: 减少多次调用，提高数据插入效率
+- 📊 **完整监控**: 适合监控系统一次性上报完整的服务器状态数据
 
 ### 3. 数据导入 (import)
 
@@ -279,6 +346,9 @@
 # 5. 插入崩溃日志
 ./target/debug/blackbox --db monitoring.db insert crash-logs --file crash_logs.json
 
+# 🆕 或者使用组合插入（一次性插入进程和系统指标）
+./target/debug/blackbox --db monitoring.db insert combined --file test_save.json
+
 # 6. 查看统计信息
 ./target/debug/blackbox --db monitoring.db stats
 
@@ -310,6 +380,116 @@ echo '[{"serverId":"srv-01","timestamp":1734249600000,"cpuUsage":45.2,"memoryUsa
 # 相同时间戳，不同指标值 - 会更新现有记录
 echo '[{"serverId":"srv-01","timestamp":1734249600000,"cpuUsage":55.8,"memoryUsage":72.1,"diskUsage":33.5,"ioRead":1200.0,"ioWrite":2500.0,"networkIn":600.0,"networkOut":300.0}]' > metrics2.json
 ./target/debug/blackbox --db test.db insert system-metrics --file metrics2.json
+```
+
+### 🆕 组合插入示例
+
+```bash
+# 使用现有的 test_save.json 进行组合插入
+./target/debug/blackbox --db test.db insert combined --file test_save.json
+
+# 查看插入结果
+./target/debug/blackbox --db test.db stats
+
+# 查询特定服务器的详细信息
+./target/debug/blackbox --db test.db query --server test-server-001
+
+# 组合插入的优势演示：一次性插入多个服务器的完整监控数据
+# 创建包含多个服务器的组合数据文件
+cat > multi_server_data.json << 'EOF'
+{
+  "process": [
+    {
+      "serverId": "web-01",
+      "serverName": "Web服务器1",
+      "serverIp": "192.168.1.10",
+      "serverOs": "Ubuntu 22.04",
+      "serverStatus": "running",
+      "pid": 1001,
+      "name": "nginx",
+      "userName": "www-data",
+      "status": "R",
+      "timestamp": 1734249600000,
+      "trend": [{"cpuUsage": 15.2, "memoryUsage": 5.8, "threadCount": 4}],
+      "threads": [
+        {
+          "threadId": 1001,
+          "userName": "www-data",
+          "priority": 20,
+          "niceValue": 0,
+          "virtualMemory": "512M",
+          "residentMemory": "32M",
+          "sharedMemory": "8M",
+          "status": "R",
+          "cpuUsage": "12.5",
+          "memoryUsage": "4.2",
+          "runtime": "02:45:18",
+          "command": "nginx: master process"
+        }
+      ]
+    },
+    {
+      "serverId": "db-01",
+      "serverName": "数据库服务器1",
+      "serverIp": "192.168.1.20",
+      "serverOs": "CentOS 8",
+      "serverStatus": "running",
+      "pid": 2001,
+      "name": "mysqld",
+      "userName": "mysql",
+      "status": "S",
+      "timestamp": 1734249600000,
+      "trend": [{"cpuUsage": 25.8, "memoryUsage": 45.2, "threadCount": 16}],
+      "threads": [
+        {
+          "threadId": 2001,
+          "userName": "mysql",
+          "priority": 20,
+          "niceValue": 0,
+          "virtualMemory": "2.1G",
+          "residentMemory": "512M",
+          "sharedMemory": "64M",
+          "status": "S",
+          "cpuUsage": "20.1",
+          "memoryUsage": "35.8",
+          "runtime": "12:30:45",
+          "command": "/usr/sbin/mysqld"
+        }
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "serverId": "web-01",
+      "timestamp": 1734249600000,
+      "cpuUsage": 35.2,
+      "memoryUsage": 58.5,
+      "diskUsage": 28.1,
+      "ioRead": 800.5,
+      "ioWrite": 1200.3,
+      "networkIn": 2048.7,
+      "networkOut": 1024.9
+    },
+    {
+      "serverId": "db-01",
+      "timestamp": 1734249600000,
+      "cpuUsage": 65.8,
+      "memoryUsage": 78.2,
+      "diskUsage": 45.6,
+      "ioRead": 5120.8,
+      "ioWrite": 3072.1,
+      "networkIn": 1024.3,
+      "networkOut": 512.7
+    }
+  ]
+}
+EOF
+
+# 一次性插入两个服务器的完整监控数据
+./target/debug/blackbox --db test.db insert combined --file multi_server_data.json
+
+# 查看插入结果
+./target/debug/blackbox --db test.db stats
 ```
 
 ### 多环境数据管理

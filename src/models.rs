@@ -332,6 +332,31 @@ pub struct SmartProcessInsert {
     pub server_status: Option<String>,
 }
 
+// 组合插入数据结构 - 同时包含进程和系统指标数据
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CombinedInsertData {
+    pub process: Vec<CombinedProcessData>,
+    pub metrics: Vec<SmartSystemMetric>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CombinedProcessData {
+    pub server_id: String,
+    pub server_name: String,
+    pub server_ip: String,
+    pub server_os: String,
+    pub server_status: String,
+    pub pid: i32,
+    pub name: String,
+    pub user_name: String,
+    pub status: String,
+    pub timestamp: i64,
+    pub trend: Vec<SmartProcessTrend>,
+    pub threads: Vec<SmartThread>,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SmartProcessTrend {

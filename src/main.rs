@@ -94,6 +94,8 @@ enum SmartDataType {
     Processes,
     /// 崩溃日志 (按时间戳智能更新/插入)
     CrashLogs,
+    /// 组合数据 (同时插入进程和系统指标数据)
+    Combined,
 }
 
 fn main() -> Result<()> {
@@ -592,6 +594,13 @@ fn smart_insert_from_file(conn: &mut diesel::SqliteConnection, data_type: SmartD
                 .map_err(|e| anyhow::anyhow!("JSON 解析错误: {}", e))?;
             
             smart_insert_crash_logs(conn, crash_logs, continue_on_error)?;
+        }
+        
+        SmartDataType::Combined => {
+            let combined_data: CombinedInsertData = serde_json::from_str(&json_content)
+                .map_err(|e| anyhow::anyhow!("JSON 解析错误: {}", e))?;
+            
+            smart_insert_combined_data(conn, combined_data, continue_on_error)?;
         }
     }
     
@@ -1157,9 +1166,273 @@ fn init_database(db_path: &Option<String>, force: bool) -> Result<()> {
     println!("   🤖 ai_recommendations - AI 建议");
     
     println!("\n💡 使用示例:");
-    println!("   blackbox --db {} smart-insert servers --file servers.json", file_path);
+    println!("   blackbox --db {} insert servers --file servers.json", file_path);
+    println!("   blackbox --db {} insert combined --file test_save.json", file_path);
     println!("   blackbox --db {} query", file_path);
     println!("   blackbox --db {} stats", file_path);
+    
+    Ok(())
+}
+
+fn smart_insert_combined_data(conn: &mut diesel::SqliteConnection, combined_data: CombinedInsertData, continue_on_error: bool) -> Result<()> {
+    println!("🔄 正在处理组合数据 (进程: {} 个, 系统指标: {} 条)", 
+             combined_data.process.len(), 
+             combined_data.metrics.len());
+    
+    let mut total_success = 0;
+    let mut total_updated = 0;
+    let mut total_errors = 0;
+    
+    // 首先处理进程数据（包含服务器信息）
+    println!("\n📋 第一步: 处理进程数据");
+    println!("═══════════════════════");
+    
+    let mut process_success = 0;
+    let mut process_updated = 0;
+    let mut process_errors = 0;
+    
+    for process_data in combined_data.process {
+        // 检查并创建服务器（如果不存在）
+        match get_server_by_id(conn, &process_data.server_id)? {
+            Some(existing_server) => {
+                // 服务器存在，更新状态
+                match update_server_status(conn, &process_data.server_id, &process_data.server_status) {
+                    Ok(_) => {
+                        println!("🔄 更新服务器状态: {} -> {}", existing_server.server_name, process_data.server_status);
+                    }
+                    Err(e) => {
+                        process_errors += 1;
+                        eprintln!("❌ 更新服务器状态失败 {}: {}", process_data.server_name, e);
+                        if !continue_on_error {
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+            None => {
+                // 服务器不存在，创建新服务器
+                let new_server = NewServer {
+                    server_id: process_data.server_id.clone(),
+                    server_name: process_data.server_name.clone(),
+                    server_ip: process_data.server_ip.clone(),
+                    server_os: process_data.server_os.clone(),
+                    server_status: process_data.server_status.clone(),
+                };
+                
+                match create_server(conn, &new_server) {
+                    Ok(_) => {
+                        println!("✅ 创建服务器: {} ({})", process_data.server_name, process_data.server_id);
+                    }
+                    Err(e) => {
+                        process_errors += 1;
+                        eprintln!("❌ 创建服务器失败 {}: {}", process_data.server_name, e);
+                        if !continue_on_error {
+                            return Err(e);
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        // 处理进程信息
+        match get_process_by_name_and_user(conn, &process_data.server_id, &process_data.name, &process_data.user_name)? {
+            Some(existing_process) => {
+                // 进程存在，更新状态
+                match update_process_status(conn, existing_process.id, &process_data.status) {
+                    Ok(_) => {
+                        process_updated += 1;
+                        println!("🔄 更新进程: {} (PID: {}) -> 状态: {}", 
+                                process_data.name, process_data.pid, process_data.status);
+                    }
+                    Err(e) => {
+                        process_errors += 1;
+                        eprintln!("❌ 更新进程失败 {}: {}", process_data.name, e);
+                        if !continue_on_error {
+                            return Err(e);
+                        }
+                        continue;
+                    }
+                }
+            }
+            None => {
+                // 进程不存在，创建新进程
+                let new_process = NewProcess {
+                    server_id: process_data.server_id.clone(),
+                    pid: process_data.pid,
+                    name: process_data.name.clone(),
+                    user_name: process_data.user_name.clone(),
+                    status: process_data.status.clone(),
+                };
+                
+                match create_process(conn, &new_process) {
+                    Ok(_) => {
+                        process_success += 1;
+                        println!("✅ 创建进程: {} (PID: {}, 用户: {})", 
+                                process_data.name, process_data.pid, process_data.user_name);
+                    }
+                    Err(e) => {
+                        process_errors += 1;
+                        eprintln!("❌ 创建进程失败 {}: {}", process_data.name, e);
+                        if !continue_on_error {
+                            return Err(e);
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        // 添加进程趋势数据
+        for trend in &process_data.trend {
+            let new_trend = NewProcessTrend {
+                server_id: process_data.server_id.clone(),
+                pid: process_data.pid,
+                timestamp: process_data.timestamp,
+                cpu_usage: trend.cpu_usage,
+                memory_usage: trend.memory_usage,
+                thread_count: trend.thread_count,
+            };
+            
+            if let Err(e) = create_process_trend(conn, &new_trend) {
+                eprintln!("⚠️  添加进程趋势数据失败 (PID: {}): {}", process_data.pid, e);
+                if !continue_on_error {
+                    return Err(e);
+                }
+            }
+        }
+        
+        // 删除旧的线程数据并添加新的线程数据
+        if let Err(e) = delete_threads_by_process(conn, &process_data.server_id, process_data.pid) {
+            eprintln!("⚠️  删除旧线程数据失败 (PID: {}): {}", process_data.pid, e);
+        }
+        
+        for thread in &process_data.threads {
+            let new_thread = NewThread {
+                server_id: process_data.server_id.clone(),
+                pid: process_data.pid,
+                thread_id: thread.thread_id,
+                user_name: thread.user_name.clone(),
+                priority: thread.priority,
+                nice_value: thread.nice_value,
+                virtual_memory: thread.virtual_memory.clone(),
+                resident_memory: thread.resident_memory.clone(),
+                shared_memory: thread.shared_memory.clone(),
+                status: thread.status.clone(),
+                cpu_usage: thread.cpu_usage.clone(),
+                memory_usage: thread.memory_usage.clone(),
+                runtime: thread.runtime.clone(),
+                command: thread.command.clone(),
+            };
+            
+            if let Err(e) = create_thread(conn, &new_thread) {
+                eprintln!("⚠️  添加线程数据失败 (TID: {}): {}", thread.thread_id, e);
+                if !continue_on_error {
+                    return Err(e);
+                }
+            }
+        }
+    }
+    
+    println!("\n📊 进程数据处理完成:");
+    println!("   ✅ 新建: {} 个", process_success);
+    println!("   🔄 更新: {} 个", process_updated);
+    println!("   ❌ 失败: {} 个", process_errors);
+    
+    // 然后处理系统指标数据
+    println!("\n📋 第二步: 处理系统指标数据");
+    println!("═══════════════════════════");
+    
+    let mut metrics_success = 0;
+    let mut metrics_updated = 0;
+    let mut metrics_errors = 0;
+    
+    for metric in combined_data.metrics {
+        // 验证服务器是否存在
+        if get_server_by_id(conn, &metric.server_id)?.is_none() {
+            metrics_errors += 1;
+            eprintln!("❌ 系统指标对应的服务器 {} 不存在", metric.server_id);
+            if !continue_on_error {
+                return Err(anyhow::anyhow!("服务器 {} 不存在", metric.server_id));
+            }
+            continue;
+        }
+        
+        let new_metric = NewSystemMetric {
+            server_id: metric.server_id.clone(),
+            timestamp: metric.timestamp,
+            cpu_usage: metric.cpu_usage,
+            memory_usage: metric.memory_usage,
+            disk_usage: metric.disk_usage,
+            io_read: metric.io_read,
+            io_write: metric.io_write,
+            network_in: metric.network_in,
+            network_out: metric.network_out,
+        };
+        
+        match get_system_metric_by_timestamp(conn, &metric.server_id, metric.timestamp)? {
+            Some(_) => {
+                // 指标已存在，更新数据
+                match update_system_metric(conn, &metric.server_id, metric.timestamp, &new_metric) {
+                    Ok(_) => {
+                        metrics_updated += 1;
+                        if metrics_updated % 10 == 0 {
+                            println!("🔄 已更新 {} 条系统指标...", metrics_updated);
+                        }
+                    }
+                    Err(e) => {
+                        metrics_errors += 1;
+                        eprintln!("❌ 更新系统指标失败 (时间戳: {}): {}", metric.timestamp, e);
+                        if !continue_on_error {
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+            None => {
+                // 指标不存在，创建新记录
+                match create_system_metric(conn, &new_metric) {
+                    Ok(_) => {
+                        metrics_success += 1;
+                        if metrics_success % 10 == 0 {
+                            println!("✅ 已插入 {} 条系统指标...", metrics_success);
+                        }
+                    }
+                    Err(e) => {
+                        metrics_errors += 1;
+                        eprintln!("❌ 插入系统指标失败 (时间戳: {}): {}", metric.timestamp, e);
+                        if !continue_on_error {
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    println!("\n📊 系统指标数据处理完成:");
+    println!("   ✅ 新建: {} 条", metrics_success);
+    println!("   🔄 更新: {} 条", metrics_updated);
+    println!("   ❌ 失败: {} 条", metrics_errors);
+    
+    // 汇总统计
+    total_success = process_success + metrics_success;
+    total_updated = process_updated + metrics_updated;
+    total_errors = process_errors + metrics_errors;
+    
+    println!("\n🎯 组合数据处理总结:");
+    println!("═══════════════════════");
+    println!("   ✅ 总新建: {} 条记录", total_success);
+    println!("   🔄 总更新: {} 条记录", total_updated);
+    println!("   ❌ 总失败: {} 条记录", total_errors);
+    
+    if total_errors == 0 {
+        println!("   🎉 所有数据处理成功！");
+    } else if total_success + total_updated > 0 {
+        println!("   ⚠️  部分数据处理成功，请检查错误信息");
+    } else {
+        println!("   💥 数据处理失败，请检查输入格式和错误信息");
+    }
     
     Ok(())
 }

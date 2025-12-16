@@ -84,6 +84,7 @@ dependencies = [
  "dotenv",
  "envy",
  "lazy_static",
+ "libsqlite3-sys",
  "serde",
  "serde_json",
  "uuid",
@@ -395,10 +396,11 @@ checksum = "37c93d8daa9d8a012fd8ab92f088405fb202ea0b6ab73ee2482ae66af4f42091"
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.35.0"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "133c182a6a2c87864fe97778797e46c7e999672690dc9fa3ee8e241aa4a9c13f"
+checksum = "cf4e226dcd58b4be396f7bd3c20da8fdee2911400705297ba7d2d7cc2c30f716"
 dependencies = [
+ "cc",
  "pkg-config",
  "vcpkg",
 ]
