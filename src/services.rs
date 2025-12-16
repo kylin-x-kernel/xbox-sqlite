@@ -4,7 +4,6 @@ use anyhow::Result;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use std::fs;
-use chrono::{Utc, Duration};
 
 use crate::database::*;
 use crate::models::*;
