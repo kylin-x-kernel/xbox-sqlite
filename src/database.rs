@@ -4,7 +4,6 @@ use anyhow::Result;
 use std::env;
 
 use crate::models::*;
-use crate::schema::{servers, system_metrics};
 
 pub fn establish_connection() -> Result<SqliteConnection> {
     establish_connection_with_url(None)
