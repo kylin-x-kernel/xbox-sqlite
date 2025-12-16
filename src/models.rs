@@ -338,6 +338,7 @@ pub struct SmartProcessInsert {
 pub struct CombinedInsertData {
     pub process: Vec<CombinedProcessData>,
     pub metrics: Vec<SmartSystemMetric>,
+    pub dmesg: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

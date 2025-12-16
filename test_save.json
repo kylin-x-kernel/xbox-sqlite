@@ -108,5 +108,6 @@
             "networkIn": 623.4,
             "networkOut": 312.5
         }
-    ]
+    ],
+    "dmesg": "[49910.077888] oops: loading out-of-tree module taints kernel...."
 }

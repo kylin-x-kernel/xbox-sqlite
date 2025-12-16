@@ -385,6 +385,46 @@ impl SmartInsertService {
     pub fn insert_combined_data(conn: &mut SqliteConnection, combined_data: CombinedInsertData, continue_on_error: bool) -> Result<InsertResult> {
         let mut result = InsertResult::new();
         
+        // 先获取第一个进程的服务器ID，用于后续的崩溃日志处理
+        let first_server_id = combined_data.process.first().map(|p| p.server_id.clone());
+        
+        // 先处理进程数据以确保服务器存在，然后检测线程数异常
+        for process_data in &combined_data.process {
+            // 先确保服务器存在
+            match get_server_by_id(conn, &process_data.server_id)? {
+                Some(_) => {
+                    // 服务器存在，更新状态
+                    let _ = update_server_status(conn, &process_data.server_id, &process_data.server_status);
+                }
+                None => {
+                    // 服务器不存在，创建新服务器
+                    let new_server = NewServer {
+                        server_id: process_data.server_id.clone(),
+                        server_name: process_data.server_name.clone(),
+                        server_ip: process_data.server_ip.clone(),
+                        server_os: process_data.server_os.clone(),
+                        server_status: process_data.server_status.clone(),
+                    };
+                    let _ = create_server(conn, &new_server);
+                }
+            }
+            
+            // 检测线程数异常
+            if Self::has_thread_exception(&process_data) {
+                match Self::handle_thread_exception_crash_log(conn, &process_data) {
+                    Ok(_) => {
+                        result.add_success();
+                    }
+                    Err(e) => {
+                        result.add_error();
+                        if !continue_on_error {
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+        }
+        
         // 处理进程数据（包含服务器信息）
         for process_data in combined_data.process {
             match Self::handle_combined_process_insert(conn, process_data, continue_on_error) {
@@ -427,6 +467,26 @@ impl SmartInsertService {
                     result.add_error();
                     if !continue_on_error {
                         return Err(e);
+                    }
+                }
+            }
+        }
+        
+        // 处理 dmesg 数据，检测系统崩溃信息
+        if let Some(dmesg_content) = combined_data.dmesg {
+            if Self::is_system_crash(&dmesg_content) {
+                // 使用之前保存的服务器ID
+                if let Some(server_id) = first_server_id {
+                    match Self::handle_crash_log_from_dmesg(conn, &server_id, &dmesg_content) {
+                        Ok(_) => {
+                            result.add_success();
+                        }
+                        Err(e) => {
+                            result.add_error();
+                            if !continue_on_error {
+                                return Err(e);
+                            }
+                        }
                     }
                 }
             }
@@ -673,6 +733,155 @@ impl SmartInsertService {
         }
         
         Ok(())
+    }
+
+    /// 检测 dmesg 内容是否包含系统崩溃信息
+    fn is_system_crash(dmesg_content: &str) -> bool {
+        let crash_indicators = [
+            "kernel BUG at",
+            "Internal error: Oops",
+            "segmentation fault",
+            "kernel panic",
+            "Call trace:",
+            "---[ end trace",
+            "BUG:",
+            "WARNING:",
+        ];
+        
+        crash_indicators.iter().any(|indicator| dmesg_content.contains(indicator))
+    }
+
+    /// 从 dmesg 内容创建崩溃日志
+    fn handle_crash_log_from_dmesg(conn: &mut SqliteConnection, server_id: &str, dmesg_content: &str) -> Result<()> {
+        use chrono::Utc;
+        
+        let timestamp = Utc::now().timestamp_millis();
+        let log_id = timestamp; // 使用时间戳作为 log_id
+        
+        let new_crash_log = NewCrashLog {
+            server_id: server_id.to_string(),
+            log_id,
+            timestamp,
+            crash_type: "segmentation_fault".to_string(),
+            severity: "high".to_string(),
+            title: "正在等待 AI 生成".to_string(),
+            message: "正在等待 AI 生成".to_string(),
+            stack_trace: Some(dmesg_content.to_string()),
+            resolved: false,
+            ai_summary: Some("正在等待 AI 生成".to_string()),
+            ai_analysis: Some("正在等待 AI 生成".to_string()),
+        };
+        
+        create_crash_log(conn, &new_crash_log)?;
+        Ok(())
+    }
+
+    /// 检测进程是否有线程数异常
+    fn has_thread_exception(process_data: &CombinedProcessData) -> bool {
+        const THREAD_EXCEPTION_THRESHOLD: i32 = 2000;
+        
+        // 检查进程趋势中的线程数
+        for trend in &process_data.trend {
+            if trend.thread_count > THREAD_EXCEPTION_THRESHOLD {
+                return true;
+            }
+        }
+        
+        // 检查实际线程数量
+        if process_data.threads.len() as i32 > THREAD_EXCEPTION_THRESHOLD {
+            return true;
+        }
+        
+        false
+    }
+
+    /// 处理线程数异常，创建崩溃日志
+    fn handle_thread_exception_crash_log(conn: &mut SqliteConnection, process_data: &CombinedProcessData) -> Result<()> {
+        use chrono::Utc;
+        
+        // 检查是否已经存在相同进程的线程异常崩溃日志，防止重复添加
+        
+        // 检查是否已存在相同的线程异常日志（通过 stack_trace 中的特殊标记来识别）
+        if Self::thread_exception_crash_log_exists(conn, &process_data.server_id, process_data.pid)? {
+            return Ok(()); // 已存在，不重复添加
+        }
+        
+        let timestamp = Utc::now().timestamp_millis();
+        let log_id = timestamp; // 使用时间戳作为 log_id
+        
+        // 构建包含进程信息的 stack_trace
+        let stack_trace = Self::build_thread_exception_stack_trace(process_data);
+        
+        let new_crash_log = NewCrashLog {
+            server_id: process_data.server_id.clone(),
+            log_id,
+            timestamp,
+            crash_type: "thread_exception".to_string(),
+            severity: "high".to_string(),
+            title: "正在等待 AI 生成".to_string(),
+            message: "正在等待 AI 生成".to_string(),
+            stack_trace: Some(stack_trace),
+            resolved: false,
+            ai_summary: Some("正在等待 AI 生成".to_string()),
+            ai_analysis: Some("正在等待 AI 生成".to_string()),
+        };
+        
+        create_crash_log(conn, &new_crash_log)?;
+        Ok(())
+    }
+
+    /// 检查是否已存在相同进程的线程异常崩溃日志
+    fn thread_exception_crash_log_exists(conn: &mut SqliteConnection, target_server_id: &str, pid: i32) -> Result<bool> {
+        use crate::schema::crash_logs::dsl::*;
+        
+        let process_marker = format!("PROCESS_INFO: PID={}", pid);
+        
+        let count: i64 = crash_logs
+            .filter(server_id.eq(target_server_id))
+            .filter(crash_type.eq("thread_exception"))
+            .filter(stack_trace.like(format!("%{}%", process_marker)))
+            .count()
+            .get_result(conn)?;
+        
+        Ok(count > 0)
+    }
+
+    /// 构建线程异常的 stack_trace，包含进程信息
+    fn build_thread_exception_stack_trace(process_data: &CombinedProcessData) -> String {
+        let mut stack_trace = String::new();
+        
+        // 添加进程信息标记
+        stack_trace.push_str(&format!("THREAD_EXCEPTION_DETECTED\n"));
+        stack_trace.push_str(&format!("PROCESS_INFO: PID={}, NAME={}, USER={}\n", 
+            process_data.pid, process_data.name, process_data.user_name));
+        stack_trace.push_str(&format!("SERVER_INFO: ID={}, NAME={}\n", 
+            process_data.server_id, process_data.server_name));
+        stack_trace.push_str(&format!("TIMESTAMP: {}\n\n", process_data.timestamp));
+        
+        // 添加线程数统计信息
+        stack_trace.push_str("THREAD_COUNT_ANALYSIS:\n");
+        stack_trace.push_str(&format!("  Actual threads count: {}\n", process_data.threads.len()));
+        
+        for (i, trend) in process_data.trend.iter().enumerate() {
+            stack_trace.push_str(&format!("  Trend[{}] thread_count: {}\n", i, trend.thread_count));
+        }
+        
+        stack_trace.push_str("\nTHREAD_DETAILS:\n");
+        
+        // 添加前10个线程的详细信息
+        for (i, thread) in process_data.threads.iter().take(10).enumerate() {
+            stack_trace.push_str(&format!("  Thread[{}]: TID={}, CPU={}, MEM={}, CMD={}\n", 
+                i, thread.thread_id, thread.cpu_usage, thread.memory_usage, 
+                thread.command.chars().take(50).collect::<String>()));
+        }
+        
+        if process_data.threads.len() > 10 {
+            stack_trace.push_str(&format!("  ... and {} more threads\n", process_data.threads.len() - 10));
+        }
+        
+        stack_trace.push_str("\nRECOMMENDATION: Check for thread leaks or infinite thread creation");
+        
+        stack_trace
     }
 }
 

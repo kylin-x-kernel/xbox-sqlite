@@ -1,0 +1,73 @@
+[49910.077888] oops: loading out-of-tree module taints kernel.
+[49910.078471] ===== Start trigger BUG_ON oops =====
+[49910.083901] ------------[ cut here ]------------
+[49910.083903] kernel BUG at /home/greatwall/public/oops/oops.c:15!
+[49910.090591] Internal error: Oops - BUG: 00000000f2000800 [#1] SMP
+[49910.097366] Modules linked in: oops(OE+) ccm st rfcomm algif_hash algif_skcipher af_alg bnep joydev rtk_btusb btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc aes_ce_blk aes_ce_cipher crct10dif_ce hid_multitouch ghash_ce sm4_ce_gcm sm4_ce_ccm hid_generic sm4_ce snd_hda_codec_conexant sm4_ce_cipher snd_hda_codec_aw882xx sm3_ce rtw89_8852be sha3_ce sha512_ce rtw89_8852b snd_hda_aw882xx sha512_arm64 rtw89_pci sha2_ce snd_hda_codec_aw883xx snd_hda_aw883xx sha256_arm64 rtw89_core sha1_ce mac80211 snd_hda_codec_generic libarc4 snd_soc_pmdk_dp ledtrig_audio thermal cfg80211 i2c_hid_acpi i2c_hid snd_hda_phytium snd_soc_hdmi_codec snd_soc_phytium_i2s_v2 snd_hda_codec hid rfkill snd_hda_core uvcvideo videobuf2_vmalloc uvc videobuf2_memops videobuf2_v4l2 videobuf2_common hwmon_vid parport_pc ppdev lp parport ramoops reed_solomon ip_tables x_tables nls_iso8859_1 vfat multipath linear ftd330_drm_dc ftg340 drm_display_helper ftv310_vpu_driver drm_kms_helper serio_raw drm i2c_phytium_platform i2c_phytium_core xhci_plat_hcd
+[49910.097438]  i2c_smbus cppc_cpufreq motorcomm(E)
+[49910.193535] CPU: 0 PID: 55631 Comm: insmod Tainted: G        W  OE     ------- ----- 6.6.30+ #274
+[49910.203088] Hardware name: Great Wall \xe9\x95\xbf\xe5\x9f\x8eN80F3/GWMNDC1GE1B, BIOS \xe9\x95\xbf\xe5\x9f\x8eBIOS V3.0 09/22/2025
+[49910.213941] pstate: 60000005 (nZCv daif -PAN -UAO -TCO -DIT -SSBS BTYPE=--)
+[49910.221584] pc : null_ptr_crash_init+0x1c/0xff8 [oops]
+[49910.227412] lr : null_ptr_crash_init+0x1c/0xff8 [oops]
+[49910.233236] sp : ffff75c519c7ba60
+[49910.237231] x29: ffff75c519c7ba60 x28: 0000000000000000 x27: ffff75c519c7bc50
+[49910.245049] x26: 000000000000000c x25: 0000000000000001 x24: 0000000000000000
+[49910.252865] x23: ffffbd52088b9400 x22: 0000000000000000 x21: ffffbd5191cf5040
+[49910.260682] x20: ffff75c425ae3800 x19: ffffbd5191d01008 x18: ffffffffffffffff
+[49910.268499] x17: ffff75c369eb651c x16: ffffbd5205cd1858 x15: ffff75c519c7b618
+[49910.276316] x14: 0000000000000000 x13: 205d313336353554 x12: 5b5d313734383730
+[49910.284133] x11: 00000000ffff7fff x10: 00000000ffff7fff x9 : ffffbd5205de3690
+[49910.291950] x8 : 00000000000bffe8 x7 : c0000000ffff7fff x6 : 00000000002bffa8
+[49910.299767] x5 : ffff75c63feaaec8 x4 : 0000000000000000 x3 : 0000000000000000
+[49910.307583] x2 : 0000000000000000 x1 : ffff75c3f6315f00 x0 : 0000000000000025
+[49910.315400] Call trace:
+[49910.318528]  null_ptr_crash_init+0x1c/0xff8 [oops]
+[49910.324004]  do_one_initcall+0x48/0x270
+[49910.328525]  do_init_module+0x5c/0x210
+[49910.332958]  load_module+0x2088/0x2138
+[49910.337389]  init_module_from_file+0x88/0xd0
+[49910.342341]  __arm64_sys_finit_module+0x20c/0x350
+[49910.347728]  invoke_syscall+0x4c/0x120
+[49910.352161]  el0_svc_common.constprop.0+0xc4/0xf0
+[49910.357548]  do_el0_svc+0x24/0x38
+[49910.361546]  el0_svc+0x30/0xc0
+[49910.365283]  el0t_64_sync_handler+0x134/0x150
+[49910.370321]  el0t_64_sync+0x14c/0x150
+[49910.374666] Code: d0ffffa0 9101e000 910003fd 94000008 (d4210000) 
+[49910.381439] ---[ end trace 0000000000000000 ]---
+[49910.386737] note: insmod[55631] exited with irqs disabled
+[49910.393006] ------------[ cut here ]------------
+[49910.398308] WARNING: CPU: 0 PID: 0 at kernel/context_tracking.c:128 ct_kernel_exit.constprop.0+0x8c/0x98
+[49910.398314] Modules linked in: oops(OE+) ccm st rfcomm algif_hash algif_skcipher af_alg bnep joydev rtk_btusb btusb btrtl btintel btbcm btmtk bluetooth ecdh_generic ecc aes_ce_blk aes_ce_cipher crct10dif_ce hid_multitouch ghash_ce sm4_ce_gcm sm4_ce_ccm hid_generic sm4_ce snd_hda_codec_conexant sm4_ce_cipher snd_hda_codec_aw882xx sm3_ce rtw89_8852be sha3_ce sha512_ce rtw89_8852b snd_hda_aw882xx sha512_arm64 rtw89_pci sha2_ce snd_hda_codec_aw883xx snd_hda_aw883xx sha256_arm64 rtw89_core sha1_ce mac80211 snd_hda_codec_generic libarc4 snd_soc_pmdk_dp ledtrig_audio thermal cfg80211 i2c_hid_acpi i2c_hid snd_hda_phytium snd_soc_hdmi_codec snd_soc_phytium_i2s_v2 snd_hda_codec hid rfkill snd_hda_core uvcvideo videobuf2_vmalloc uvc videobuf2_memops videobuf2_v4l2 videobuf2_common hwmon_vid parport_pc ppdev lp parport ramoops reed_solomon ip_tables x_tables nls_iso8859_1 vfat multipath linear ftd330_drm_dc ftg340 drm_display_helper ftv310_vpu_driver drm_kms_helper serio_raw drm i2c_phytium_platform i2c_phytium_core xhci_plat_hcd
+[49910.408552]  i2c_smbus cppc_cpufreq motorcomm(E)
+[49910.504649] CPU: 0 PID: 0 Comm: swapper/0 Tainted: G      D W  OE     ------- ----- 6.6.30+ #274
+[49910.514115] Hardware name: Great Wall \xe9\x95\xbf\xe5\x9f\x8eN80F3/GWMNDC1GE1B, BIOS \xe9\x95\xbf\xe5\x9f\x8eBIOS V3.0 09/22/2025
+[49910.524968] pstate: 200000c5 (nzCv daIF -PAN -UAO -TCO -DIT -SSBS BTYPE=--)
+[49910.532611] pc : ct_kernel_exit.constprop.0+0x8c/0x98
+[49910.538344] lr : ct_idle_enter+0xc/0x18
+[49910.542861] sp : ffffbd52081c3cd0
+[49910.546857] x29: ffffbd52081c3cd0 x28: ffffbd52081d9210 x27: ffffbd520732b098
+[49910.554674] x26: ffff75c63ffc2f80 x25: 0000000000000000 x24: 00002d64ab3ed5f4
+[49910.562491] x23: 0000000000000000 x22: ffff75c360c6f800 x21: ffffbd520865de60
+[49910.570307] x20: ffffbd520865de78 x19: ffff75c63feb97c8 x18: 0000000000000000
+[49910.578124] x17: 0000000000000000 x16: 0000000000000000 x15: 0000aaaacebff940
+[49910.585941] x14: 0000000000000000 x13: 0000000000000000 x12: 0000000000000000
+[49910.593757] x11: 071c71c71c71c71c x10: ffff75c63febc074 x9 : ffffbd5206cc0efc
+[49910.601574] x8 : 0000000000000074 x7 : ffff75c63febc094 x6 : 000002335d555e28
+[49910.609391] x5 : 4000000000000002 x4 : ffffb8743821b000 x3 : ffffbd52081c3cd0
+[49910.617208] x2 : 4000000000000000 x1 : ffffbd5207c9e7c8 x0 : ffffbd5207c9e7c8
+[49910.625024] Call trace:
+[49910.628152]  ct_kernel_exit.constprop.0+0x8c/0x98
+[49910.633538]  ct_idle_enter+0xc/0x18
+[49910.637708]  cpuidle_enter_state+0x29c/0x420
+[49910.642660]  cpuidle_enter+0x3c/0x58
+[49910.646920]  do_idle+0x1fc/0x278
+[49910.650832]  cpu_startup_entry+0x38/0x48
+[49910.655437]  rest_init+0xcc/0xd8
+[49910.659347]  arch_call_rest_init+0x14/0x20
+[49910.664129]  start_kernel+0x690/0x8c0
+[49910.668474]  __primary_switched+0xbc/0xd0
+[49910.673167] ---[ end trace 0000000000000000 ]---
+
+
