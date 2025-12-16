@@ -4,9 +4,11 @@ use anyhow::Result;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use std::fs;
+use chrono::{Utc, Duration};
 
 use crate::database::*;
 use crate::models::*;
+const THREAD_EXCEPTION_THRESHOLD: i32 = 2000;
 
 /// 插入操作结果
 #[derive(Debug, Clone)]
@@ -306,6 +308,9 @@ impl SmartInsertService {
         servers: Vec<NewServer>,
         continue_on_error: bool,
     ) -> Result<InsertResult> {
+        // 插入前清理旧数据
+        let _ = DataCleanService::cleanup_old_data(conn);
+
         let mut result = InsertResult::new();
 
         for server in servers {
@@ -335,6 +340,9 @@ impl SmartInsertService {
         metrics: Vec<SmartSystemMetric>,
         continue_on_error: bool,
     ) -> Result<InsertResult> {
+        // 插入前清理旧数据
+        let _ = DataCleanService::cleanup_old_data(conn);
+
         let mut result = InsertResult::new();
 
         for metric in metrics {
@@ -373,6 +381,9 @@ impl SmartInsertService {
         processes: Vec<SmartProcessInsert>,
         continue_on_error: bool,
     ) -> Result<InsertResult> {
+        // 插入前清理旧数据
+        let _ = DataCleanService::cleanup_old_data(conn);
+
         let mut result = InsertResult::new();
 
         for process_data in processes {
@@ -402,6 +413,9 @@ impl SmartInsertService {
         crash_logs: Vec<SmartCrashLog>,
         continue_on_error: bool,
     ) -> Result<InsertResult> {
+        // 插入前清理旧数据
+        let _ = DataCleanService::cleanup_old_data(conn);
+
         let mut result = InsertResult::new();
 
         for log_data in crash_logs {
@@ -440,6 +454,9 @@ impl SmartInsertService {
         combined_data: CombinedInsertData,
         continue_on_error: bool,
     ) -> Result<InsertResult> {
+        // 插入前清理旧数据
+        let _ = DataCleanService::cleanup_old_data(conn);
+
         let mut result = InsertResult::new();
 
         // 先获取第一个进程的服务器ID，用于后续的崩溃日志处理
@@ -885,8 +902,6 @@ impl SmartInsertService {
 
     /// 检测进程是否有线程数异常
     fn has_thread_exception(process_data: &CombinedProcessData) -> bool {
-        const THREAD_EXCEPTION_THRESHOLD: i32 = 2000;
-
         // 检查进程趋势中的线程数
         for trend in &process_data.trend {
             if trend.thread_count > THREAD_EXCEPTION_THRESHOLD {
@@ -1023,6 +1038,46 @@ impl SmartInsertService {
 pub struct DataCleanService;
 
 impl DataCleanService {
+    /// 清理旧数据（保留最近24小时的数据）
+    pub fn cleanup_old_data(conn: &mut SqliteConnection) -> Result<()> {
+        use crate::schema::{system_metrics, process_trends, crash_logs, threads, ai_recommendations};
+        use diesel::prelude::*;
+        use chrono::{Utc, Duration};
+
+        let cutoff_timestamp = Utc::now().timestamp() - 24 * 3600;
+        let cutoff_datetime = Utc::now().naive_utc() - Duration::hours(24);
+
+        // 清理系统指标
+        diesel::delete(system_metrics::table.filter(system_metrics::timestamp.lt(cutoff_timestamp)))
+            .execute(conn)?;
+
+        // 清理进程趋势
+        diesel::delete(process_trends::table.filter(process_trends::timestamp.lt(cutoff_timestamp)))
+            .execute(conn)?;
+
+        // 清理没有趋势数据的进程（即不活跃超过24小时的进程）
+        diesel::sql_query("DELETE FROM processes WHERE NOT EXISTS (SELECT 1 FROM process_trends WHERE process_trends.server_id = processes.server_id AND process_trends.pid = processes.pid)")
+            .execute(conn)?;
+
+        // 清理孤儿线程数据（所属进程已被删除）
+        diesel::sql_query("DELETE FROM threads WHERE NOT EXISTS (SELECT 1 FROM processes WHERE processes.server_id = threads.server_id AND processes.pid = threads.pid)")
+            .execute(conn)?;
+
+        // 清理崩溃日志
+        diesel::delete(crash_logs::table.filter(crash_logs::timestamp.lt(cutoff_timestamp)))
+            .execute(conn)?;
+            
+        // 清理线程快照
+        diesel::delete(threads::table.filter(threads::created_at.lt(cutoff_datetime)))
+            .execute(conn)?;
+            
+        // 清理 AI 建议
+        diesel::delete(ai_recommendations::table.filter(ai_recommendations::created_at.lt(cutoff_datetime)))
+            .execute(conn)?;
+
+        Ok(())
+    }
+
     /// 清空数据库
     pub fn clean_database(conn: &mut SqliteConnection) -> Result<()> {
         use crate::schema::*;
@@ -1046,6 +1101,9 @@ pub struct JsonImportService;
 impl JsonImportService {
     /// 导入 JSON 数据
     pub fn import_json_data(conn: &mut SqliteConnection, json_data: JsonData) -> Result<()> {
+        // 导入前清理旧数据
+        let _ = DataCleanService::cleanup_old_data(conn);
+
         for json_server in json_data.servers {
             // 检查服务器是否已存在
             match get_server_by_id(conn, &json_server.server_id)? {
