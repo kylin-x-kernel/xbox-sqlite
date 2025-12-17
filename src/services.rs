@@ -925,8 +925,8 @@ impl SmartInsertService {
 
         // 检查是否已经存在相同进程的线程异常崩溃日志，防止重复添加
 
-        // 检查是否已存在相同的线程异常日志（通过 stack_trace 中的特殊标记来识别）
-        if Self::thread_exception_crash_log_exists(conn, &process_data.server_id, process_data.pid)?
+        // 检查是否已存在相同的线程异常日志（通过 stack_trace 中的进程名称标记来识别）
+        if Self::thread_exception_crash_log_exists(conn, &process_data.server_id, &process_data.name)?
         {
             return Ok(()); // 已存在，不重复添加
         }
@@ -955,15 +955,15 @@ impl SmartInsertService {
         Ok(())
     }
 
-    /// 检查是否已存在相同进程的线程异常崩溃日志
+    /// 检查是否已存在相同进程的线程异常崩溃日志（使用进程名称判断）
     fn thread_exception_crash_log_exists(
         conn: &mut SqliteConnection,
         target_server_id: &str,
-        pid: i32,
+        process_name: &str,
     ) -> Result<bool> {
         use crate::schema::crash_logs::dsl::*;
 
-        let process_marker = format!("PROCESS_INFO: PID={}", pid);
+        let process_marker = format!("PROCESS_NAME: {}", process_name);
 
         let count: i64 = crash_logs
             .filter(server_id.eq(target_server_id))
@@ -979,8 +979,9 @@ impl SmartInsertService {
     fn build_thread_exception_stack_trace(process_data: &CombinedProcessData) -> String {
         let mut stack_trace = String::new();
 
-        // 添加进程信息标记
+        // 添加进程信息标记（使用 PROCESS_NAME 作为唯一标识，因为 PID 可能会变化）
         stack_trace.push_str(&format!("THREAD_EXCEPTION_DETECTED\n"));
+        stack_trace.push_str(&format!("PROCESS_NAME: {}\n", process_data.name));
         stack_trace.push_str(&format!(
             "PROCESS_INFO: PID={}, NAME={}, USER={}\n",
             process_data.pid, process_data.name, process_data.user_name
